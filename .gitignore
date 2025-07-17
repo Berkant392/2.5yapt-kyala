@@ -1,0 +1,21 @@
+# Bu dosya, Git tarafından takip edilmemesi gereken dosyaları ve klasörleri belirtir.
+
+# İşletim sistemi tarafından oluşturulan dosyalar
+.DS_Store
+Thumbs.db
+
+# Bağımlılıkların (kütüphanelerin) yüklendiği klasör
+# Bu klasör her zaman "npm install" komutuyla yeniden oluşturulur.
+node_modules/
+
+# Netlify'ın yerel geliştirme veya build sırasında oluşturabileceği dosyalar
+.netlify/
+
+# Yerel ortam değişkeni dosyaları (API anahtarları gibi gizli bilgileri içerebilir)
+.env
+.env.*
+
+# Log dosyaları
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
