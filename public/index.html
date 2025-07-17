@@ -271,30 +271,31 @@
         // ===================================================================================
         // SORU ÇÖZÜCÜ UYGULAMASI
         // ===================================================================================
-        const SolutionDisplay = ({ solution, subject, onSolve, status }) => {
+        const SolutionDisplay = ({ solution, subject, onGetSteps, onGetFinalAnswer, status }) => {
             const { simplified_question, solution_steps, final_answer, recommendations } = solution;
             const cleanFinalAnswer = (answer) => answer ? answer.replace(/[\$\*]/g, '') : '';
+            
+            // 3. Aşama (Sonuç) otomatik olarak tetiklenir
+            useEffect(() => {
+                if (status === 'steps_received') {
+                    onGetFinalAnswer();
+                }
+            }, [status]);
 
             return (
                 <div className="space-y-6 mt-6 pt-6 border-t border-slate-700">
                     <div className="text-center"><h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">  {subject} Sorusu Çözümü</h2></div>
                     
-                    {/* 1. Aşama: Sadece basitleştirilmiş soru gösterilir */}
                     {simplified_question && <div className="bg-slate-700/50 p-4 sm:p-5 rounded-lg border-l-4 border-amber-400"><h3 className="text-lg font-bold text-amber-300 mb-3">🤔 Soruyu Basitleştirelim!</h3><UniversalMathRenderer text={simplified_question} /></div>}
                     
-                    {/* 2. Aşama: Çözümün geri kalanı */}
+                    {/* 2. Aşama: Çözüm adımları */}
                     {solution_steps ? (
-                        <>
-                            {solution_steps && <div className="bg-slate-700/50 p-4 sm:p-5 rounded-lg border-l-4 border-sky-400"><h3 className="text-lg font-bold text-sky-300 mb-3">🚀 Çözüm Adımları:</h3><UniversalMathRenderer text={solution_steps} /></div>}
-                            {final_answer && <div className="flex justify-center items-center gap-3 p-4 bg-green-500/20 border border-green-500/30 rounded-lg"><h3 className="text-lg font-bold text-green-300">🎉 Nihai Cevap:</h3><div className="text-lg text-green-200"><KatexRenderer content={cleanFinalAnswer(final_answer)} isBlock={false} /></div></div>}
-                            {recommendations && <div className="bg-slate-700/50 p-4 sm:p-5 rounded-lg border-l-4 border-teal-400"><h3 className="text-lg font-bold text-teal-300 mb-3">📚 Berkant Hoca'dan Tavsiyeler!</h3><UniversalMathRenderer text={recommendations} /></div>}
-                        </>
+                        <div className="bg-slate-700/50 p-4 sm:p-5 rounded-lg border-l-4 border-sky-400"><h3 className="text-lg font-bold text-sky-300 mb-3">🚀 Çözüm Adımları:</h3><UniversalMathRenderer text={solution_steps} /></div>
                     ) : (
-                        // Çözümün geri kalanı henüz yüklenmediyse butonu göster
                         status === 'simplified' && (
                              <div className="text-center pt-4">
                                 <button 
-                                    onClick={onSolve} 
+                                    onClick={onGetSteps} 
                                     className="bg-gradient-to-r from-green-500 to-teal-500 text-white font-semibold py-3 px-8 rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-150"
                                 >
                                     Hazırsan Çözüme Geçelim!
@@ -302,14 +303,17 @@
                             </div>
                         )
                     )}
+
+                    {/* 3. Aşama: Nihai cevap ve tavsiyeler */}
+                    {final_answer && <div className="flex justify-center items-center gap-3 p-4 bg-green-500/20 border border-green-500/30 rounded-lg"><h3 className="text-lg font-bold text-green-300">🎉 Nihai Cevap:</h3><div className="text-lg text-green-200"><KatexRenderer content={cleanFinalAnswer(final_answer)} isBlock={false} /></div></div>}
+                    {recommendations && <div className="bg-slate-700/50 p-4 sm:p-5 rounded-lg border-l-4 border-teal-400"><h3 className="text-lg font-bold text-teal-300 mb-3">📚 Berkant Hoca'dan Tavsiyeler!</h3><UniversalMathRenderer text={recommendations} /></div>}
                 </div>
             );
         };
 
         const useSoruCozucu = () => {
             const [image, setImage] = useState(null); const [imageBase64, setImageBase64] = useState(''); const [selectedSubject, setSelectedSubject] = useState(null); const [solution, setSolution] = useState(null); 
-            // --- DEĞİŞİKLİK: 'status' yerine 'solutionStep' ---
-            const [solutionStep, setSolutionStep] = useState('idle'); // idle, simplifying, simplified, solving, solved, error
+            const [solutionStep, setSolutionStep] = useState('idle'); // idle, simplifying, simplified, getting_steps, steps_received, getting_final_answer, solved, error
             const [loadingMessage, setLoadingMessage] = useState(''); const [error, setError] = useState(''); const fileInputRef = useRef(null);
             const [showAskTeacher, setShowAskTeacher] = useState(false); const [teacherQuestion, setTeacherQuestion] = useState(''); const [chatHistory, setChatHistory] = useState([]); const [isChatLoading, setIsChatLoading] = useState(false);
             const [toastMessage, setToastMessage] = useState(''); const [showFeedbackButtons, setShowFeedbackButtons] = useState(true);
@@ -338,60 +342,64 @@
                 setSolutionStep('simplifying'); setLoadingMessage('Soru analiz ediliyor...'); setError(''); setSolution(null); setShowFeedbackButtons(true);
                 try { 
                     const prompt = `Lütfen bu ${selectedSubject} sorusunu, bir öğrencinin daha kolay anlayacağı şekilde, tek bir paragrafta yeniden ifade et. Sadece sorunun ne istediğini açıkla, çözümü verme.`;
-                    
                     const proxyPayload = { task: 'simplify', prompt: prompt, imageBase64Data: imageBase64 };
                     const result = await callProxyAPI(proxyPayload);
-
                     if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
                         const parsedJson = JSON.parse(result.candidates[0].content.parts[0].text);
                         setSolution(parsedJson); 
                         setSolutionStep('simplified');
-                    } else {
-                        throw new Error('Proxy\'den beklenen formatta bir yanıt alınamadı.');
-                    }
+                    } else { throw new Error('Proxy\'den beklenen formatta bir yanıt alınamadı.'); }
                 } catch (err) { 
-                    console.error("Hata Detayı:", err); 
-                    setError(`Bir hata oluştu: ${err.message}`); 
-                    setSolutionStep('error'); 
-                } finally { 
-                    setLoadingMessage(''); 
-                } 
+                    setError(`Bir hata oluştu: ${err.message}`); setSolutionStep('error'); 
+                } finally { setLoadingMessage(''); } 
             };
             
-            // --- 2. ADIM: Tam çözümü oluştur ---
-            const startFullSolutionProcess = async () => {
-                setSolutionStep('solving'); setLoadingMessage('Çözüm adımları oluşturuluyor...'); setError('');
+            // --- 2. ADIM: Sadece çözüm adımlarını al ---
+            const getSolutionSteps = async () => {
+                setSolutionStep('getting_steps'); setLoadingMessage('Çözüm adımları oluşturuluyor...'); setError('');
                 try {
-                    const prompt = `### GÖREV: SORU ÇÖZÜMÜ ###
-Bir önceki adımda basitleştirilmiş hali "${solution.simplified_question}" olan ${selectedSubject} sorusunu, aşağıdaki JSON formatına harfiyen uyarak, adım adım çöz.
+                    const prompt = `### GÖREV: ÇÖZÜM ADIMLARI ###
+Bir önceki adımda basitleştirilmiş hali "${solution.simplified_question}" olan ${selectedSubject} sorusunun çözüm adımlarını, aşağıdaki JSON formatına harfiyen uyarak oluştur. Sadece çözüm adımlarını ver.
+### JSON ÇIKTI ŞABLONU (Buna uy) ###
+{ "solution_steps": "🎯 **1. Adım:** ...\\n\\n🔢 **2. Adım:** ..." }
+### KURALLAR ###
+- Her adımı '\\n' ile ayır ve emoji ile başlat.
+- LATEX: Tüm matematiksel ifadeler '$' içine alınmalı ve JSON için çift ters taksim ('\\\\') kullanılmalıdır.`;
+                    const proxyPayload = { task: 'get_steps', prompt: prompt, imageBase64Data: imageBase64 };
+                    const result = await callProxyAPI(proxyPayload);
+                    if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
+                        const parsedJson = JSON.parse(result.candidates[0].content.parts[0].text);
+                        setSolution(prev => ({ ...prev, ...parsedJson }));
+                        setSolutionStep('steps_received'); // Bu durum 3. adımı tetikleyecek
+                    } else { throw new Error('Proxy\'den beklenen formatta bir yanıt alınamadı.'); }
+                } catch (err) {
+                    setError(`Çözüm adımları oluşturulurken bir hata oluştu: ${err.message}`); setSolutionStep('error'); 
+                } finally { setLoadingMessage(''); }
+            };
+            
+            // --- 3. ADIM: Sadece nihai cevabı ve tavsiyeleri al ---
+            const getFinalAnswer = async () => {
+                setSolutionStep('getting_final_answer');
+                try {
+                     const prompt = `### GÖREV: SONUÇLANDIRMA ###
+Bir önceki adımda çözüm adımları oluşturulan "${solution.simplified_question}" sorusu için, aşağıdaki JSON formatına harfiyen uyarak nihai cevabı ve tavsiyeleri oluştur.
 ### JSON ÇIKTI ŞABLONU (Buna uy) ###
 {
-  "solution_steps": "🎯 **1. Adım:** ...\\n\\n🔢 **2. Adım:** ...",
   "final_answer": "$SONUÇ$",
   "recommendations": "✔️ ...\\n💡 ..."
 }
 ### KURALLAR ###
-- **solution_steps**: Her adımı '\\n' ile ayır ve emoji ile başlat.
 - **final_answer**: Sadece nihai cevabı içermeli ve matematiksel ise '$' içine alınmalıdır.
-- **LATEX**: Tüm matematiksel ifadeler '$' içine alınmalı ve JSON için çift ters taksim ('\\\\') kullanılmalıdır.`;
-
-                    const proxyPayload = { task: 'solve', prompt: prompt, imageBase64Data: imageBase64 };
+- **recommendations**: En az iki tavsiye ver ve her birini '\\n' ile ayır.`;
+                    const proxyPayload = { task: 'get_final_answer', prompt: prompt, imageBase64Data: imageBase64 };
                     const result = await callProxyAPI(proxyPayload);
-                    
                     if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
                         const parsedJson = JSON.parse(result.candidates[0].content.parts[0].text);
-                        // Gelen yeni veriyi mevcut çözümle birleştir
-                        setSolution(prevSolution => ({ ...prevSolution, ...parsedJson }));
+                        setSolution(prev => ({ ...prev, ...parsedJson }));
                         setSolutionStep('solved');
-                    } else {
-                        throw new Error('Proxy\'den beklenen formatta bir yanıt alınamadı.');
-                    }
+                    } else { throw new Error('Proxy\'den beklenen formatta bir yanıt alınamadı.'); }
                 } catch (err) {
-                    console.error("Hata Detayı:", err); 
-                    setError(`Çözüm oluşturulurken bir hata oluştu: ${err.message}`); 
-                    setSolutionStep('error'); 
-                } finally {
-                    setLoadingMessage('');
+                     setError(`Sonuç oluşturulurken bir hata oluştu: ${err.message}`); setSolutionStep('error'); 
                 }
             };
 
@@ -400,17 +408,17 @@ Bir önceki adımda basitleştirilmiş hali "${solution.simplified_question}" ol
             const reset = () => { setImage(null); setImageBase64(''); setSelectedSubject(null); setSolution(null); setSolutionStep('idle'); setError(''); setShowAskTeacher(false); setChatHistory([]); setTeacherQuestion(''); setShowFeedbackButtons(true); setToastMessage(''); if (fileInputRef.current) fileInputRef.current.value = ""; };
             const handleLike = () => { setToastMessage("Değerlendirmen için teşekkürler! Bu çözüm, gelecekteki sorular için referans olacaktır. ✨"); setShowFeedbackButtons(false); };
             
-            return { image, selectedSubject, solution, solutionStep, loadingMessage, error, fileInputRef, handleFileChange, triggerFileSelect, setSelectedSubject, startSimplificationProcess, startFullSolutionProcess, reset, showAskTeacher, setShowAskTeacher, teacherQuestion, setTeacherQuestion, chatHistory, isChatLoading, handleAskTeacher, toastMessage, showFeedbackButtons, handleLike };
+            return { image, selectedSubject, solution, solutionStep, loadingMessage, error, fileInputRef, handleFileChange, triggerFileSelect, setSelectedSubject, startSimplificationProcess, getSolutionSteps, getFinalAnswer, reset, showAskTeacher, setShowAskTeacher, teacherQuestion, setTeacherQuestion, chatHistory, isChatLoading, handleAskTeacher, toastMessage, showFeedbackButtons, handleLike };
         };
 
         const SoruCozucuPage = ({ user, onLogout }) => {
-            const { image, selectedSubject, solution, solutionStep, loadingMessage, error, fileInputRef, handleFileChange, triggerFileSelect, setSelectedSubject, startSimplificationProcess, startFullSolutionProcess, reset, showAskTeacher, setShowAskTeacher, teacherQuestion, setTeacherQuestion, chatHistory, isChatLoading, handleAskTeacher, toastMessage, showFeedbackButtons, handleLike } = useSoruCozucu();
+            const { image, selectedSubject, solution, solutionStep, loadingMessage, error, fileInputRef, handleFileChange, triggerFileSelect, setSelectedSubject, startSimplificationProcess, getSolutionSteps, getFinalAnswer, reset, showAskTeacher, setShowAskTeacher, teacherQuestion, setTeacherQuestion, chatHistory, isChatLoading, handleAskTeacher, toastMessage, showFeedbackButtons, handleLike } = useSoruCozucu();
             const subjects = ['Matematik', 'Fizik', 'Kimya', 'Biyoloji', 'Tarih', 'Coğrafya', 'Edebiyat', 'Türkçe'];
             const [showCorrectionPrompt, setShowCorrectionPrompt] = useState(false);
             const [correctionText, setCorrectionText] = useState('');
             const handleReSolve = () => { setShowCorrectionPrompt(false); /* Yeniden çözme mantığı güncellenmeli */ reset(); };
             
-            const isLoading = solutionStep === 'simplifying' || solutionStep === 'solving';
+            const isLoading = solutionStep === 'simplifying' || solutionStep === 'getting_steps' || solutionStep === 'getting_final_answer';
 
             return ( 
                 <div className="w-full max-w-4xl mx-auto bg-slate-800/50 backdrop-blur-xl border border-slate-700 rounded-2xl shadow-2xl p-4 sm:p-6 md:p-8 text-slate-200"> 
@@ -455,9 +463,9 @@ Bir önceki adımda basitleştirilmiş hali "${solution.simplified_question}" ol
 
                         {isLoading && <LoadingIndicator message={loadingMessage} />} 
                         
-                        {solution && (solutionStep === 'simplified' || solutionStep === 'solving' || solutionStep === 'solved') && (
+                        {solution && (solutionStep !== 'idle' && solutionStep !== 'simplifying' && solutionStep !== 'error') && (
                             <>
-                                <SolutionDisplay solution={solution} subject={selectedSubject} onSolve={startFullSolutionProcess} status={solutionStep} />
+                                <SolutionDisplay solution={solution} subject={selectedSubject} onGetSteps={getSolutionSteps} onGetFinalAnswer={getFinalAnswer} status={solutionStep} />
                                 
                                 {solutionStep === 'solved' && (
                                     <>
