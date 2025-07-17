@@ -1,0 +1,14 @@
+# Netlify temel yapılandırma dosyası
+
+[build]
+  # Sitenizin yayınlanacağı klasör. 
+  # Bizim yapımızda bu "public" klasörüdür.
+  publish = "public/"
+  
+  # Sunucusuz fonksiyonlarınızın bulunduğu klasör.
+  functions = "netlify/functions/"
+
+[functions]
+  # Fonksiyonlar için Node.js sürümünü ve paketleyiciyi belirtir.
+  # Bu ayar, fonksiyonumuzun doğru şekilde derlenmesini sağlar.
+  node_bundler = "esbuild"
