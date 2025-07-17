@@ -1,8 +1,7 @@
 # Netlify temel yapılandırma dosyası
 
 [build]
-  # Sitenizin yayınlanacağı klasör. 
-  # Bizim yapımızda bu "public" klasörüdür.
+  # Sitenizin yayınlanacağı klasör.
   publish = "public/"
   
   # Sunucusuz fonksiyonlarınızın bulunduğu klasör.
@@ -10,5 +9,8 @@
 
 [functions]
   # Fonksiyonlar için Node.js sürümünü ve paketleyiciyi belirtir.
-  # Bu ayar, fonksiyonumuzun doğru şekilde derlenmesini sağlar.
   node_bundler = "esbuild"
+  
+  # --- YENİ SATIR BURADA ---
+  # Fonksiyonun zaman aşımı süresini 25 saniyeye çıkarır.
+  timeout = 25
