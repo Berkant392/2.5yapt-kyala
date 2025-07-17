@@ -7,10 +7,12 @@
   # Sunucusuz fonksiyonlarınızın bulunduğu klasör.
   functions = "netlify/functions/"
 
+# Bu bölüm, fonksiyonların DERLENME ayarlarını içerir.
 [functions]
   # Fonksiyonlar için Node.js sürümünü ve paketleyiciyi belirtir.
   node_bundler = "esbuild"
-  
-  # --- YENİ SATIR BURADA ---
+
+# Bu bölüm, TÜM fonksiyonların (*) ÇALIŞMA ZAMANI ayarlarını içerir.
+[functions."*"]
   # Fonksiyonun zaman aşımı süresini 25 saniyeye çıkarır.
   timeout = 25
