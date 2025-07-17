@@ -1,28 +1,60 @@
-// Bu fonksiyon, Netlify'ın sunucularında çalışır.
-// API anahtarını güvenli ortam değişkenlerinden alır.
-const fetch = require('node-fetch');
+// Harici kütüphane yerine Node.js'in dahili https modülünü kullanıyoruz.
+const https = require('https');
 
-exports.handler = async function (event, context) {
-  // Sadece POST isteklerine izin ver
+// Bu yardımcı fonksiyon, https isteklerini daha modern bir "Promise" yapısıyla kullanmamızı sağlar.
+function httpsRequest(options, postData) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      let body = '';
+      res.on('data', (chunk) => {
+        body += chunk;
+      });
+      res.on('end', () => {
+        try {
+          // Gelen cevabın hem durum kodunu hem de içeriğini döndür
+          resolve({
+            statusCode: res.statusCode,
+            headers: res.headers,
+            body: JSON.parse(body),
+          });
+        } catch (e) {
+          // Eğer cevap JSON değilse, hatayı düz metin olarak döndür
+          resolve({
+            statusCode: res.statusCode,
+            headers: res.headers,
+            body: { error: { message: 'API\'den geçersiz JSON yanıtı alındı.', details: body } }
+          });
+        }
+      });
+    });
+
+    req.on('error', (e) => {
+      reject(e);
+    });
+
+    // İstek gövdesini yaz
+    req.write(postData);
+    req.end();
+  });
+}
+
+exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
   try {
-    // API Anahtarını Netlify ortam değişkenlerinden güvenli bir şekilde al
-    // ÖNEMLİ: Bu değişkeni Netlify sitenizin ayarlarından eklemeniz gerekir.
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error('API anahtarı bulunamadı. Lütfen Netlify ayarlarını kontrol edin.');
+      throw new Error('API anahtarı bulunamadı. Lütfen Netlify ortam değişkenlerini kontrol edin.');
     }
 
-    // Frontend'den gelen veriyi al
     const { prompt, imageBase64Data, isChat = false } = JSON.parse(event.body);
     
     const modelName = "gemini-2.5-flash";
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+    const hostname = 'generativelanguage.googleapis.com';
+    const path = `/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
-    // Gemini API'sine gönderilecek payload'ı (veri paketini) oluştur
     let parts = [{ text: prompt }];
     if (imageBase64Data && !isChat) {
       parts.push({ inlineData: { mimeType: "image/jpeg", data: imageBase64Data } });
@@ -32,7 +64,6 @@ exports.handler = async function (event, context) {
       contents: [{ role: "user", parts: parts }],
     };
     
-    // Eğer istek bir soru çözümü ise (sohbet değilse), JSON formatında cevap iste
     if (!isChat) {
       payload.generationConfig = {
         responseMimeType: "application/json",
@@ -49,36 +80,40 @@ exports.handler = async function (event, context) {
       };
     }
 
-    // Gemini API'sine isteği gönder
-    const response = await fetch(apiUrl, {
+    const postData = JSON.stringify(payload);
+
+    const options = {
+      hostname: hostname,
+      path: path,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+      },
+    };
+
+    const response = await httpsRequest(options, postData);
 
     // Gemini API'sinden gelen cevabı kontrol et
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({ error: { message: "API'den geçersiz JSON yanıtı alındı."} }));
-      console.error('Gemini API Error:', errorBody);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      console.error('Gemini API Error:', response.body);
       return {
-        statusCode: response.status,
-        body: JSON.stringify({ message: 'Gemini API tarafından bir hata döndürüldü.', error: errorBody.error }),
+        statusCode: response.statusCode,
+        body: JSON.stringify({ message: 'Gemini API tarafından bir hata döndürüldü.', error: response.body.error }),
       };
     }
 
-    const data = await response.json();
-
-    // Başarılı cevabı frontend'e (index.html'e) geri gönder
+    // Başarılı cevabı frontend'e geri gönder
     return {
       statusCode: 200,
-      body: JSON.stringify(data),
+      body: JSON.stringify(response.body),
     };
 
   } catch (error) {
     console.error('Proxy Function Error:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ message: 'Proxy fonksiyonunda bir hata oluştu.', error: error.message }),
+      body: JSON.stringify({ message: 'Proxy fonksiyonunda kritik bir hata oluştu.', error: error.message }),
     };
   }
 };
