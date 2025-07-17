@@ -51,7 +51,9 @@ exports.handler = async function (event) {
 
     const { prompt, imageBase64Data, isChat = false } = JSON.parse(event.body);
     
-    const modelName = "gemini-2.5-flash";
+    // --- DEĞİŞİKLİK BURADA ---
+    // Daha güçlü akıl yürütme için "pro" modelini kullanıyoruz.
+    const modelName = "gemini-2.5-pro";
     const hostname = 'generativelanguage.googleapis.com';
     const path = `/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
@@ -94,7 +96,6 @@ exports.handler = async function (event) {
 
     const response = await httpsRequest(options, postData);
 
-    // Gemini API'sinden gelen cevabı kontrol et
     if (response.statusCode < 200 || response.statusCode >= 300) {
       console.error('Gemini API Error:', response.body);
       return {
@@ -103,7 +104,6 @@ exports.handler = async function (event) {
       };
     }
 
-    // Başarılı cevabı frontend'e geri gönder
     return {
       statusCode: 200,
       body: JSON.stringify(response.body),
