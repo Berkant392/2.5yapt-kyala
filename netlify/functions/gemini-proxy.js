@@ -6,37 +6,52 @@ function httpsRequest(options, postData) {
   return new Promise((resolve, reject) => {
     const req = https.request(options, (res) => {
       let body = '';
-      res.on('data', (chunk) => {
-        body += chunk;
-      });
+      res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => {
         try {
-          // Gelen cevabın hem durum kodunu hem de içeriğini döndür
-          resolve({
-            statusCode: res.statusCode,
-            headers: res.headers,
-            body: JSON.parse(body),
-          });
+          resolve({ statusCode: res.statusCode, body: JSON.parse(body) });
         } catch (e) {
-          // Eğer cevap JSON değilse, hatayı düz metin olarak döndür
-          resolve({
-            statusCode: res.statusCode,
-            headers: res.headers,
-            body: { error: { message: 'API\'den geçersiz JSON yanıtı alındı.', details: body } }
-          });
+          resolve({ statusCode: res.statusCode, body: { error: { message: 'API\'den geçersiz JSON yanıtı alındı.', details: body } } });
         }
       });
     });
-
-    req.on('error', (e) => {
-      reject(e);
-    });
-
-    // İstek gövdesini yaz
+    req.on('error', (e) => { reject(e); });
     req.write(postData);
     req.end();
   });
 }
+
+// Tek bir Gemini API çağrısını yöneten fonksiyon
+async function callGemini(apiKey, modelName, payload) {
+    const hostname = 'generativelanguage.googleapis.com';
+    const path = `/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+    const postData = JSON.stringify(payload);
+    const options = {
+      hostname: hostname,
+      path: path,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
+    };
+
+    const response = await httpsRequest(options, postData);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      // Hata durumunda, hatayı fırlatarak bir sonraki adıma geçilmesini sağla
+      throw new Error(`Model ${modelName} başarısız oldu. Durum Kodu: ${response.statusCode}`);
+    }
+    
+    // Cevap geçerli değilse yine hata fırlat
+    if (!response.body.candidates || !response.body.candidates[0]?.content?.parts?.[0]?.text) {
+        console.error(`Model ${modelName} geçersiz cevap döndü:`, response.body);
+        if(response.body.promptFeedback && response.body.promptFeedback.blockReason) {
+             throw new Error(`İstek, güvenlik nedeniyle engellendi: ${response.body.promptFeedback.blockReason}`);
+        }
+        throw new Error(`Model ${modelName} beklenen formatta bir yanıt vermedi.`);
+    }
+
+    return response;
+}
+
 
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
@@ -51,20 +66,12 @@ exports.handler = async function (event) {
 
     const { prompt, imageBase64Data, isChat = false } = JSON.parse(event.body);
     
-    // --- DEĞİŞİKLİK BURADA ---
-    // Hızlı ve verimli "flash" modeline geri dönüyoruz.
-    const modelName = "gemini-2.5-flash";
-    const hostname = 'generativelanguage.googleapis.com';
-    const path = `/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-
     let parts = [{ text: prompt }];
     if (imageBase64Data && !isChat) {
       parts.push({ inlineData: { mimeType: "image/jpeg", data: imageBase64Data } });
     }
 
-    const payload = {
-      contents: [{ role: "user", parts: parts }],
-    };
+    const payload = { contents: [{ role: "user", parts: parts }] };
     
     if (!isChat) {
       payload.generationConfig = {
@@ -82,41 +89,34 @@ exports.handler = async function (event) {
       };
     }
 
-    const postData = JSON.stringify(payload);
+    let response;
+    try {
+      // 1. Adım: Önce hızlı olan "flash" modelini dene
+      console.log("1. deneme: gemini-2.5-flash modeli kullanılıyor...");
+      response = await callGemini(apiKey, "gemini-2.5-flash", payload);
+      console.log("gemini-2.5-flash başarılı oldu.");
 
-    const options = {
-      hostname: hostname,
-      path: path,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(postData),
-      },
-    };
-
-    const response = await httpsRequest(options, postData);
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      console.error('Gemini API Error:', response.body);
-      return {
-        statusCode: response.statusCode,
-        body: JSON.stringify({ message: 'Gemini API tarafından bir hata döndürüldü.', error: response.body.error }),
-      };
+    } catch (flashError) {
+      // 2. Adım: Eğer "flash" modeli başarısız olursa, "pro" modelini dene
+      console.warn("gemini-2.5-flash başarısız oldu:", flashError.message);
+      console.log("2. deneme: gemini-2.5-pro modeline geçiliyor...");
+      
+      response = await callGemini(apiKey, "gemini-2.5-pro", payload);
+      console.log("gemini-2.5-pro başarılı oldu.");
     }
 
+    // Başarılı cevabı frontend'e geri gönder
     return {
       statusCode: 200,
       body: JSON.stringify(response.body),
     };
 
   } catch (error) {
-    console.error('Proxy Function Error:', error);
+    // Eğer her iki model de başarısız olursa, son hatayı döndür
+    console.error('Tüm denemeler başarısız oldu:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ message: 'Proxy fonksiyonunda kritik bir hata oluştu.', error: error.message }),
+      body: JSON.stringify({ message: 'Soru analiz edilirken bir sorun oluştu. Lütfen daha sonra tekrar deneyin.', error: error.message }),
     };
   }
 };
-```
-
-Canvas'taki `netlify.toml` dosyasını ve bu yeni `gemini-proxy.js` içeriğini projenize uygulayıp GitHub'a gönderdiğinizde, uygulamanız tekrar `gemini-2.5-flash` modelini kullanmaya başlayacakt
