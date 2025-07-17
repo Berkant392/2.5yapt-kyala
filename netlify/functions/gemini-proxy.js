@@ -34,14 +34,12 @@ exports.handler = async function (event) {
     // Frontend'den gelen görevi (task) ve diğer verileri al
     const { task, prompt, imageBase64Data } = JSON.parse(event.body);
     
-    // Her iki adım için de hızlı olan flash modelini kullanıyoruz.
-    // Aşamalı yapı sayesinde zaman aşımı sorunu yaşanmayacak.
+    // Tüm adımlar için hızlı ve verimli flash modelini kullanıyoruz.
     const modelName = "gemini-2.5-flash"; 
     const hostname = 'generativelanguage.googleapis.com';
     const path = `/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
     let parts = [{ text: prompt }];
-    // Sadece resim verisi varsa ve gerekliyse ekle
     if (imageBase64Data) {
       parts.push({ inlineData: { mimeType: "image/jpeg", data: imageBase64Data } });
     }
@@ -58,20 +56,29 @@ exports.handler = async function (event) {
           required: ["simplified_question"]
         }
       };
-    } else if (task === 'solve') {
+    } else if (task === 'get_steps') {
       payload.generationConfig = {
         responseMimeType: "application/json",
         responseSchema: {
           type: "OBJECT",
+          properties: { "solution_steps": { "type": "STRING" } },
+          required: ["solution_steps"]
+        }
+      };
+    } else if (task === 'get_final_answer') {
+        payload.generationConfig = {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
           properties: {
-            "solution_steps": { "type": "STRING" },
             "final_answer": { "type": "STRING" },
             "recommendations": { "type": "STRING" }
           },
-          required: ["solution_steps", "final_answer", "recommendations"]
+          required: ["final_answer", "recommendations"]
         }
       };
-    } else {
+    }
+    else {
         throw new Error("Geçersiz görev belirtildi.");
     }
 
