@@ -308,6 +308,7 @@
 
         const useSoruCozucu = () => {
             const [image, setImage] = useState(null); const [imageBase64, setImageBase64] = useState(''); const [selectedSubject, setSelectedSubject] = useState(null); const [solution, setSolution] = useState(null); 
+            // --- DEĞİŞİKLİK: 'status' yerine 'solutionStep' ---
             const [solutionStep, setSolutionStep] = useState('idle'); // idle, simplifying, simplified, solving, solved, error
             const [loadingMessage, setLoadingMessage] = useState(''); const [error, setError] = useState(''); const fileInputRef = useRef(null);
             const [showAskTeacher, setShowAskTeacher] = useState(false); const [teacherQuestion, setTeacherQuestion] = useState(''); const [chatHistory, setChatHistory] = useState([]); const [isChatLoading, setIsChatLoading] = useState(false);
@@ -422,7 +423,7 @@ Bir önceki adımda basitleştirilmiş hali "${solution.simplified_question}" ol
                     </header> 
                     <AlertDisplay message={error} type="error" />
                     <div className="flex flex-col gap-6"> 
-                        {/* Sadece başlangıçta veya resetlendiğinde gösterilir */}
+                        {/* Başlangıç ve Seçim Ekranı */}
                         {solutionStep === 'idle' && (
                             <>
                                 <div className="w-full flex flex-col items-center justify-center bg-slate-900/50 p-4 sm:p-6 rounded-lg border-2 border-dashed border-slate-600"> 
@@ -444,9 +445,16 @@ Bir önceki adımda basitleştirilmiş hali "${solution.simplified_question}" ol
                             </>
                         )}
                         
+                        {/* Çözüm süreci başladıktan sonraki kalıcı arayüz */}
+                        {solutionStep !== 'idle' && solutionStep !== 'error' && (
+                             <div className="w-full flex flex-col items-center justify-center bg-slate-900/50 p-4 sm:p-6 rounded-lg border-2 border-dashed border-slate-600"> 
+                                <img src={image} alt="Yüklenen Soru" className="max-w-full max-h-60 mx-auto rounded-lg shadow-md" />
+                                <button onClick={reset} className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700">Yeni Soru Yükle</button>
+                            </div> 
+                        )}
+
                         {isLoading && <LoadingIndicator message={loadingMessage} />} 
                         
-                        {/* Çözümün herhangi bir aşaması başladıysa gösterilir */}
                         {solution && (solutionStep === 'simplified' || solutionStep === 'solving' || solutionStep === 'solved') && (
                             <>
                                 <SolutionDisplay solution={solution} subject={selectedSubject} onSolve={startFullSolutionProcess} status={solutionStep} />
