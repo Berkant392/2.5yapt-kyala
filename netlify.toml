@@ -13,6 +13,7 @@
   node_bundler = "esbuild"
 
 # Bu bölüm, TÜM fonksiyonların (*) ÇALIŞMA ZAMANI ayarlarını içerir.
+# Ücretsiz planda bu süre genellikle 10 saniye ile sınırlıdır, 
+# ancak bu ayarı eklemek projenin gelecekteki olası ihtiyaçları için iyi bir pratiktir.
 [functions."*"]
-  # "Pro" modelinin çalışabilmesi için zaman aşımı süresini 25 saniyeye çıkarır.
   timeout = 25
