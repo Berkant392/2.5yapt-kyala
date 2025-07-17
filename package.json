@@ -1,0 +1,14 @@
+{
+  "name": "soru-cozucu-app",
+  "version": "1.0.0",
+  "description": "Netlify Functions kullanarak Gemini API'sine güvenli istekler gönderen Soru Çözücü uygulaması.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  }
+}
