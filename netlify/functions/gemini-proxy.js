@@ -52,8 +52,8 @@ exports.handler = async function (event) {
     const { prompt, imageBase64Data, isChat = false } = JSON.parse(event.body);
     
     // --- DEĞİŞİKLİK BURADA ---
-    // Daha güçlü akıl yürütme için "pro" modelini kullanıyoruz.
-    const modelName = "gemini-2.5-pro";
+    // Hızlı ve verimli "flash" modeline geri dönüyoruz.
+    const modelName = "gemini-2.5-flash";
     const hostname = 'generativelanguage.googleapis.com';
     const path = `/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
@@ -117,3 +117,6 @@ exports.handler = async function (event) {
     };
   }
 };
+```
+
+Canvas'taki `netlify.toml` dosyasını ve bu yeni `gemini-proxy.js` içeriğini projenize uygulayıp GitHub'a gönderdiğinizde, uygulamanız tekrar `gemini-2.5-flash` modelini kullanmaya başlayacakt
