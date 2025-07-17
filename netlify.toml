@@ -12,4 +12,7 @@
   # Fonksiyonlar için Node.js sürümünü ve paketleyiciyi belirtir.
   node_bundler = "esbuild"
 
-# Not: Zaman aşımı ayarı kaldırıldı. Flash model için varsayılan 10 saniye yeterlidir.
+# Bu bölüm, TÜM fonksiyonların (*) ÇALIŞMA ZAMANI ayarlarını içerir.
+[functions."*"]
+  # "Pro" modelinin çalışabilmesi için zaman aşımı süresini 25 saniyeye çıkarır.
+  timeout = 25
