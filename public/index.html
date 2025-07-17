@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Soru Çözücü - Berkant Hoca | Aşamalı Çözüm</title>
+    <title>Soru Çözücü - Berkant Hoca | Nihai Protokol</title>
     
     <!-- Temel Kütüphaneler (Production Sürümleri) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -82,9 +82,16 @@
         .answer-button { transition: all 0.2s ease-in-out; }
         .answer-button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         
-        .feedback-box { position: relative; z-index: 1; border-radius: 12px; background: linear-gradient(135deg, #1e1b4b, #4c1d95); color: white; padding: 20px; overflow: hidden; }
-        .feedback-box::before { content: ''; position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: -2; margin: -2px; border-radius: inherit; background: linear-gradient(90deg, #818cf8, #c084fc, #f0abfc, #c084fc, #818cf8); background-size: 400% 400%; animation: animated-border 4s ease-in-out infinite; }
-        @keyframes animated-border { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        .feedback-box { 
+            position: relative; 
+            z-index: 1; 
+            border-radius: 12px; 
+            background: linear-gradient(135deg, #1e293b, #312e81);
+            color: white; 
+            padding: 20px; 
+            overflow: hidden; 
+            border: 1px solid #4f46e5;
+        }
 
         .katex { color: #d1d5db; }
         .inline-math { 
@@ -226,9 +233,8 @@
         };
         
         const renderLineWithMath = (line) => {
-            const parts = line.split(/(\*\*.*?\*\*|\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/g).filter(Boolean);
+            const parts = line.split(/(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/g).filter(Boolean);
             return parts.map((part, partIndex) => {
-                if (part.startsWith('**') && part.endsWith('**')) { return <strong key={partIndex}>{part.slice(2, -2)}</strong>; }
                 if (part.startsWith('$$') && part.endsWith('$$')) { return <KatexRenderer key={partIndex} content={part.slice(2, -2)} isBlock={true} />; }
                 if (part.startsWith('$') && part.endsWith('$')) { return <KatexRenderer key={partIndex} content={part.slice(1, -1)} isBlock={false} />; }
                 return <span key={partIndex}>{part}</span>;
@@ -238,32 +244,11 @@
         const UniversalMathRenderer = ({ text, baseTextColor = 'text-slate-300' }) => {
             const parsedContent = useMemo(() => {
                 if (!text) return null;
-                if (!text.includes('###')) {
-                     return text.split('\n').map((line, lineIndex) => (
-                        <p key={lineIndex} className={`flex items-baseline flex-wrap ${baseTextColor}`}>{renderLineWithMath(line)}</p>
-                    ));
-                }
-                const sections = text.split(/(###.*?###)/g);
-                return sections.map((section, index) => {
-                    if (section.startsWith('###') && section.endsWith('###')) {
-                        const titleText = section.slice(3, -3).trim();
-                        return (<h4 key={index} className="text-md font-bold text-violet-400 mt-4 mb-2 pb-1 border-b-2 border-violet-800/50 flex items-center flex-wrap">{renderLineWithMath(titleText)}</h4>);
-                    }
-                    const sanitizedText = section.replace(/\\n/g, '\n').trim();
-                    if (!sanitizedText) return null;
-                    return sanitizedText.split('\n').map((line, lineIndex) => {
-                        const emojiRegex = /^(🎯|🔢|➡️|✅|💡|🔍|📝|📌|✔️|➕|➖|➗|✖️|🟰)\s*/;
-                        const match = line.match(emojiRegex);
-                        const emoji = match ? match[0] : null;
-                        const restOfLine = match ? line.substring(match[0].length) : line;
-                        return (
-                            <div key={`${index}-${lineIndex}`} className="flex items-start mb-3">
-                                {emoji && <span className="text-xl mr-3 mt-1">{emoji}</span>}
-                                <div className={`flex-1 ${baseTextColor} leading-relaxed flex items-baseline flex-wrap`}>{renderLineWithMath(restOfLine)}</div>
-                            </div>
-                        );
-                    });
-                });
+                // \n karakterlerini gerçek satır sonlarına çevir
+                const lines = text.replace(/\\n/g, '\n').split('\n');
+                return lines.map((line, lineIndex) => (
+                    <p key={lineIndex} className={`flex items-baseline flex-wrap ${baseTextColor}`}>{renderLineWithMath(line)}</p>
+                ));
             }, [text]);
             return <div>{parsedContent}</div>;
         };
@@ -271,49 +256,65 @@
         // ===================================================================================
         // SORU ÇÖZÜCÜ UYGULAMASI
         // ===================================================================================
-        const SolutionDisplay = ({ solution, subject, onGetSteps, onGetFinalAnswer, status }) => {
+        const SolutionDisplay = ({ solution, subject }) => {
             const { simplified_question, solution_steps, final_answer, recommendations } = solution;
             const cleanFinalAnswer = (answer) => answer ? answer.replace(/[\$\*]/g, '') : '';
             
-            // 3. Aşama (Sonuç) otomatik olarak tetiklenir
-            useEffect(() => {
-                if (status === 'steps_received') {
-                    onGetFinalAnswer();
-                }
-            }, [status]);
+            const steps = solution_steps ? solution_steps.split(/\n\n(?=🎯|🔢|➡️|✅|💡|🔍|📝|📌|✔️|➕|➖|➗|✖️|�)/) : [];
+            const recommendation_parts = recommendations ? recommendations.split(/\n\n(?=🔑|🚩)/) : [];
 
             return (
                 <div className="space-y-6 mt-6 pt-6 border-t border-slate-700">
-                    <div className="text-center"><h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">  {subject} Sorusu Çözümü</h2></div>
+                    <div className="text-center"><h2 className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">  {subject} Sorusu Çözümü</h2></div>
                     
-                    {simplified_question && <div className="bg-slate-700/50 p-4 sm:p-5 rounded-lg border-l-4 border-amber-400"><h3 className="text-lg font-bold text-amber-300 mb-3">🤔 Soruyu Basitleştirelim!</h3><UniversalMathRenderer text={simplified_question} /></div>}
+                    {simplified_question && <div className="bg-slate-800/50 p-4 sm:p-5 rounded-lg border-l-4 border-amber-400"><h3 className="flex items-center gap-x-3 text-lg text-amber-300 mb-3"><span className="text-2xl">🤔</span><span>Soruyu Basitleştirelim!</span></h3><UniversalMathRenderer text={simplified_question} /></div>}
                     
-                    {/* 2. Aşama: Çözüm adımları */}
-                    {solution_steps ? (
-                        <div className="bg-slate-700/50 p-4 sm:p-5 rounded-lg border-l-4 border-sky-400"><h3 className="text-lg font-bold text-sky-300 mb-3">🚀 Çözüm Adımları:</h3><UniversalMathRenderer text={solution_steps} /></div>
-                    ) : (
-                        status === 'simplified' && (
-                             <div className="text-center pt-4">
-                                <button 
-                                    onClick={onGetSteps} 
-                                    className="bg-gradient-to-r from-green-500 to-teal-500 text-white font-semibold py-3 px-8 rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-150"
-                                >
-                                    Hazırsan Çözüme Geçelim!
-                                </button>
+                    {steps.length > 0 && (
+                        <div className="bg-slate-800/50 p-4 sm:p-5 rounded-lg border-l-4 border-sky-400">
+                            <h3 className="flex items-center gap-x-3 text-lg text-sky-300 mb-4"><span className="text-2xl">🚀</span><span>Çözüm Adımları</span></h3>
+                            <div className="space-y-3">
+                                {steps.map((step, index) => {
+                                    const emojiMatch = step.match(/^(🎯|🔢|➡️|✅|💡|🔍|📝|📌|✔️|➕|➖|➗|✖️|🟰)\s*/);
+                                    const emoji = emojiMatch ? emojiMatch[0] : null;
+                                    const restOfStep = emoji ? step.substring(emoji.length) : step;
+                                    return (
+                                        <div key={index} className="flex items-start p-3 bg-slate-700/40 rounded-lg">
+                                            {emoji && <span className="text-xl mr-3 mt-1">{emoji}</span>}
+                                            <div className="flex-1 text-slate-300 leading-relaxed"><UniversalMathRenderer text={restOfStep} /></div>
+                                        </div>
+                                    );
+                                })}
                             </div>
-                        )
+                        </div>
                     )}
 
-                    {/* 3. Aşama: Nihai cevap ve tavsiyeler */}
-                    {final_answer && <div className="flex justify-center items-center gap-3 p-4 bg-green-500/20 border border-green-500/30 rounded-lg"><h3 className="text-lg font-bold text-green-300">🎉 Nihai Cevap:</h3><div className="text-lg text-green-200"><KatexRenderer content={cleanFinalAnswer(final_answer)} isBlock={false} /></div></div>}
-                    {recommendations && <div className="bg-slate-700/50 p-4 sm:p-5 rounded-lg border-l-4 border-teal-400"><h3 className="text-lg font-bold text-teal-300 mb-3">📚 Berkant Hoca'dan Tavsiyeler!</h3><UniversalMathRenderer text={recommendations} /></div>}
+                    {final_answer && <div className="flex justify-center items-center gap-3 p-4 bg-green-800/30 border border-green-500/30 rounded-lg"><h3 className="flex items-center gap-x-3 text-lg text-green-300"><span className="text-2xl">🎉</span><span>Nihai Cevap:</span></h3><div className="text-lg text-green-200"><KatexRenderer content={cleanFinalAnswer(final_answer)} isBlock={false} /></div></div>}
+                    
+                    {recommendation_parts.length > 0 && (
+                         <div className="bg-slate-800/50 p-4 sm:p-5 rounded-lg border-l-4 border-teal-400">
+                             <h3 className="flex items-center gap-x-3 text-lg text-teal-300 mb-4"><span className="text-2xl">📚</span><span>Berkant Hoca'dan Tavsiyeler</span></h3>
+                             <div className="space-y-4">
+                                {recommendation_parts.map((rec, index) => {
+                                    const emojiMatch = rec.match(/^(🔑|🚩)\s*/);
+                                    const emoji = emojiMatch ? emojiMatch[0] : null;
+                                    const restOfRec = emoji ? rec.substring(emoji.length) : rec;
+                                    return(
+                                        <div key={index} className="flex items-start">
+                                             {emoji && <span className="text-xl mr-3 mt-1">{emoji}</span>}
+                                             <div className="flex-1 text-slate-300 leading-relaxed"><UniversalMathRenderer text={restOfRec} /></div>
+                                        </div>
+                                    )
+                                })}
+                             </div>
+                         </div>
+                    )}
                 </div>
             );
         };
 
         const useSoruCozucu = () => {
             const [image, setImage] = useState(null); const [imageBase64, setImageBase64] = useState(''); const [selectedSubject, setSelectedSubject] = useState(null); const [solution, setSolution] = useState(null); 
-            const [solutionStep, setSolutionStep] = useState('idle'); // idle, simplifying, simplified, getting_steps, steps_received, getting_final_answer, solved, error
+            const [status, setStatus] = useState('idle'); // idle, loading, success, error
             const [loadingMessage, setLoadingMessage] = useState(''); const [error, setError] = useState(''); const fileInputRef = useRef(null);
             const [showAskTeacher, setShowAskTeacher] = useState(false); const [teacherQuestion, setTeacherQuestion] = useState(''); const [chatHistory, setChatHistory] = useState([]); const [isChatLoading, setIsChatLoading] = useState(false);
             const [toastMessage, setToastMessage] = useState(''); const [showFeedbackButtons, setShowFeedbackButtons] = useState(true);
@@ -328,97 +329,149 @@
                     body: JSON.stringify(payload)
                 });
                 if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({ message: 'Sunucudan geçersiz bir hata yanıtı alındı.' }));
-                    const errorMessage = (errorData.error && errorData.error.message) ? errorData.error.message : (errorData.message || `Proxy Hatası (${response.status})`);
-                    console.error("Proxy Error Details:", errorData);
+                    const errorData = await response.json().catch(() => ({ error: { message: 'Sunucudan geçersiz bir hata yanıtı alındı.'} }));
+                    const errorMessage = errorData.error?.message || `Proxy Hatası (${response.status})`;
                     throw new Error(errorMessage);
                 }
-                return await response.json();
-            };
-
-            // --- 1. ADIM: Sadece soruyu basitleştir ---
-            const startSimplificationProcess = async (userAnswer) => { 
-                if (!imageBase64 || !selectedSubject) { setError('Lütfen önce bir resim yükleyip ders seçin.'); return; } 
-                setSolutionStep('simplifying'); setLoadingMessage('Soru analiz ediliyor...'); setError(''); setSolution(null); setShowFeedbackButtons(true);
-                try { 
-                    const prompt = `Lütfen bu ${selectedSubject} sorusunu, bir öğrencinin daha kolay anlayacağı şekilde, tek bir paragrafta yeniden ifade et. Sadece sorunun ne istediğini açıkla, çözümü verme.`;
-                    const proxyPayload = { task: 'simplify', prompt: prompt, imageBase64Data: imageBase64 };
-                    const result = await callProxyAPI(proxyPayload);
-                    if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
-                        const parsedJson = JSON.parse(result.candidates[0].content.parts[0].text);
-                        setSolution(parsedJson); 
-                        setSolutionStep('simplified');
-                    } else { throw new Error('Proxy\'den beklenen formatta bir yanıt alınamadı.'); }
-                } catch (err) { 
-                    setError(`Bir hata oluştu: ${err.message}`); setSolutionStep('error'); 
-                } finally { setLoadingMessage(''); } 
-            };
-            
-            // --- 2. ADIM: Sadece çözüm adımlarını al ---
-            const getSolutionSteps = async () => {
-                setSolutionStep('getting_steps'); setLoadingMessage('Çözüm adımları oluşturuluyor...'); setError('');
-                try {
-                    const prompt = `### GÖREV: ÇÖZÜM ADIMLARI ###
-Bir önceki adımda basitleştirilmiş hali "${solution.simplified_question}" olan ${selectedSubject} sorusunun çözüm adımlarını, aşağıdaki JSON formatına harfiyen uyarak oluştur. Sadece çözüm adımlarını ver.
-### JSON ÇIKTI ŞABLONU (Buna uy) ###
-{ "solution_steps": "🎯 **1. Adım:** ...\\n\\n🔢 **2. Adım:** ..." }
-### KURALLAR ###
-- Her adımı '\\n' ile ayır ve emoji ile başlat.
-- LATEX: Tüm matematiksel ifadeler '$' içine alınmalı ve JSON için çift ters taksim ('\\\\') kullanılmalıdır.`;
-                    const proxyPayload = { task: 'get_steps', prompt: prompt, imageBase64Data: imageBase64 };
-                    const result = await callProxyAPI(proxyPayload);
-                    if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
-                        const parsedJson = JSON.parse(result.candidates[0].content.parts[0].text);
-                        setSolution(prev => ({ ...prev, ...parsedJson }));
-                        setSolutionStep('steps_received'); // Bu durum 3. adımı tetikleyecek
-                    } else { throw new Error('Proxy\'den beklenen formatta bir yanıt alınamadı.'); }
-                } catch (err) {
-                    setError(`Çözüm adımları oluşturulurken bir hata oluştu: ${err.message}`); setSolutionStep('error'); 
-                } finally { setLoadingMessage(''); }
-            };
-            
-            // --- 3. ADIM: Sadece nihai cevabı ve tavsiyeleri al ---
-            const getFinalAnswer = async () => {
-                setSolutionStep('getting_final_answer');
-                try {
-                     const prompt = `### GÖREV: SONUÇLANDIRMA ###
-Bir önceki adımda çözüm adımları oluşturulan "${solution.simplified_question}" sorusu için, aşağıdaki JSON formatına harfiyen uyarak nihai cevabı ve tavsiyeleri oluştur.
-### JSON ÇIKTI ŞABLONU (Buna uy) ###
-{
-  "final_answer": "$SONUÇ$",
-  "recommendations": "✔️ ...\\n💡 ..."
-}
-### KURALLAR ###
-- **final_answer**: Sadece nihai cevabı içermeli ve matematiksel ise '$' içine alınmalıdır.
-- **recommendations**: En az iki tavsiye ver ve her birini '\\n' ile ayır.`;
-                    const proxyPayload = { task: 'get_final_answer', prompt: prompt, imageBase64Data: imageBase64 };
-                    const result = await callProxyAPI(proxyPayload);
-                    if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
-                        const parsedJson = JSON.parse(result.candidates[0].content.parts[0].text);
-                        setSolution(prev => ({ ...prev, ...parsedJson }));
-                        setSolutionStep('solved');
-                    } else { throw new Error('Proxy\'den beklenen formatta bir yanıt alınamadı.'); }
-                } catch (err) {
-                     setError(`Sonuç oluşturulurken bir hata oluştu: ${err.message}`); setSolutionStep('error'); 
+                const result = await response.json();
+                if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
+                    return payload.isChat ? result.candidates[0].content.parts[0].text : JSON.parse(result.candidates[0].content.parts[0].text);
+                } else {
+                    console.error("Unexpected API response from proxy:", result);
+                    if(result.promptFeedback && result.promptFeedback.blockReason) {
+                         throw new Error(`İstek, güvenlik nedeniyle engellendi: ${result.promptFeedback.blockReason}`);
+                    }
+                    throw new Error('Proxy\'den beklenen formatta bir yanıt alınamadı.');
                 }
             };
 
-            const handleAskTeacher = async () => { /* Bu fonksiyon şimdilik aynı kalabilir */ };
+            const startSolutionProcess = async (userAnswer, correctionText = null) => { 
+                if (!imageBase64 || !selectedSubject) { setError('Lütfen önce bir resim yükleyip ders seçin.'); return; } 
+                setStatus('loading'); setLoadingMessage('Soru derinlemesine analiz ediliyor...'); setError(''); setSolution(null); setShowFeedbackButtons(true);
+                try { 
+                    const prompt = `### PLATİN STANDART PROTOKOLÜ V7 - NİHAİ MÜHÜR ###
 
-            const reset = () => { setImage(null); setImageBase64(''); setSelectedSubject(null); setSolution(null); setSolutionStep('idle'); setError(''); setShowAskTeacher(false); setChatHistory([]); setTeacherQuestion(''); setShowFeedbackButtons(true); setToastMessage(''); if (fileInputRef.current) fileInputRef.current.value = ""; };
+**1. PERSONA: PEDAGOJİK MENTOR "BERKANT HOCA"**
+Sen, adı "Berkant Hoca" olan, ${selectedSubject} alanında uzman, son derece bilgili ve pedagojik bir yapay zeka eğitimcisin. Görevin sadece soruyu çözmek değil, öğrencinin konuyu temelden anlamasını sağlamaktır. Empati kur, sabırlı ol ve en karmaşık konuları bile basit analojilerle açıkla.
+
+**2. ZORUNLU İÇSEL DÜŞÜNCE ZİNCİRİ (CEVABI ÜRETMEDEN ÖNCE BUNLARI DÜŞÜN)**
+   a. **DÜŞÜN (DECONSTRUCT):** Sorudaki tüm verileri, metinleri, sayıları, şekilleri ve gizli bilgileri ayrıştır. "Verilenler ne?", "İstenen ne?", "Sorunun altında yatan temel prensip ne?"
+   b. **PLANLA (BLUEPRINT):** Çözüme giden en mantıklı ve en basit yol haritasını adım adım planla.
+   c. **UYGULA (GENERATE):** Tüm bu analizleri tamamladıktan sonra, bulgularını aşağıda belirtilen JSON formatında, kusursuz bir şekilde dışa aktar.
+
+**3. LATEX FORMATLAMA - KATI KURALLAR (HATA PAYI SIFIR!)**
+   a. **KOPYA KAĞIDI (Sadece Bunları Kullan):**
+      - Çarpma için: \`\\\\times\`
+      - Bölme için: \`\\\\div\`
+      - Kesir için: \`\\\\frac{pay}{payda}\`
+      - Karekök için: \`\\\\sqrt{ifade}\`
+      - Üslü ifade için: \`x^2\`
+      - Metin içinde formül: \`$...$\`
+      - Ayrı satırda formül: \`$$...$$\`
+      - Türkçe metinler için: Sadece ve sadece birimler veya özel isimler gibi durumlarda \`\\\\text{...}\` kullan. Örnek: \`V_{\\\\text{otobüs}}\`
+   b. **KESİNLİKLE YASAKLI FORMATLAR (Bunları ASLA Kullanma):**
+      - Markdown formatları: \`**\`, \`*\`, \`#\` vb. KESİNLİKLE YASAKTIR.
+      - Anlamsız LaTeX birleştirmeleri: \`ext\`, \`imes\`, \`Vimest\` vb.
+      - Tek ters taksimli LaTeX komutları: \`\\times\`, \`\\frac\` vb. (JSON için her zaman çift olmalı: \`\\\\times\`).
+      - Matematiksel bir ifadeyi birden fazla '$' bloğuna bölmek. (YANLIŞ: \`$x$ = $5$\`. DOĞRU: \`$x = 5$\`.)
+   c. **JSON UYUMLULUĞU:** JSON içinde tüm ters taksimler ('\') çift olmalıdır ('\\\\').
+
+**4. ZORUNLU KENDİNİ ELEŞTİRME (JSON ÜRETMEDEN ÖNCEKİ SON KONTROL)**
+   - Yasaklı formatlardan birini kullandım mı? (Kullanmamalısın).
+   - JSON formatım geçerli mi? Tüm 4 anahtar da dolu mu?
+   - **LATEX KONTROLÜ:** Yasaklı listeden bir komut kullandım mı? Komutlarım kopya kağıdındaki gibi mi? Tüm taksimlerim çift mi?
+   - **NİHAİ CEVAP KONTROLÜ:** \`final_answer\` alanına SADECE nihai cevabı (şık veya sonuç) mı yazdım? İçinde KESİNLİKLE cümle var mı? (Olmamalı).
+   - Cevaplarım, "Berkant Hoca" personasına uygun, anlaşılır ve pedagojik mi?
+
+**5. DİNAMİK GERİ BİLDİRİM ENTEGRASYONU**
+${correctionText ? `- **ÖNCEKİ HATADAN DERS ÇIKAR:** Daha önce bu soruya bir çözüm sundun ama kullanıcı şu geri bildirimi yaptı: "${correctionText}". Bu yeni ve kritik bilgiyi dikkate alarak, düşünce zincirini ve çözümünü yeniden oluştur. Hatayı kabul et ve düzelt.` : ''}
+
+**6. GÖREV: JSON ÇIKTISI ÜRET**
+Yukarıdaki tüm protokolü takip ederek, verilen ${selectedSubject} sorusu için aşağıdaki 4 anahtarı içeren bir JSON nesnesi oluştur.
+
+### GİRDİ BİLGİLERİ ###
+- **Ders:** ${selectedSubject}
+- **Kullanıcının Verdiği Cevap:** ${userAnswer || "Belirtilmedi"}
+
+### İSTENEN JSON FORMATI ###
+{
+  "simplified_question": "Bu soruda bizden ne istendiğinin basit bir dille açıklaması.",
+  "solution_steps": "🎯 1. Adım: ...\\n\\n🔢 2. Adım: ...",
+  "final_answer": "Eğer kullanıcının cevabı 'A', 'B', 'C', 'D' veya 'E' ise, SADECE o harfi yaz (Örn: '$C$'). Eğer cevap 'Belirtilmedi' ise, SADECE hesapladığın sonucu yaz (Örn: '$42$'). ASLA cümle kurma.",
+  "recommendations": "🔑 Anahtar Kural: Bu konunun en temel formülü veya kuralı (kısa ve öz).\\n\\n🚩 Kavram Yanılgısı: Bu konuda sık düşülen bir tuzak veya yanlış anlama (kısa ve öz)."
+}`;
+                    
+                    const parsedJson = await callProxyAPI({prompt: prompt, imageBase64Data: imageBase64});
+                    setSolution(parsedJson); 
+                    setStatus('success');
+                } catch (err) { 
+                    setError(`Bir hata oluştu: ${err.message}`); 
+                    setStatus('error'); 
+                } finally { 
+                    setLoadingMessage(''); 
+                } 
+            };
+
+            const handleAskTeacher = async () => {
+                if (!teacherQuestion.trim()) return;
+                const newChatHistory = [...chatHistory, { role: 'user', content: teacherQuestion }];
+                setChatHistory(newChatHistory);
+                const currentQuestion = teacherQuestion;
+                setTeacherQuestion('');
+                setIsChatLoading(true);
+                try {
+                    const prompt = `### "ÖĞRETMENE SOR" PROTOKOLÜ ###
+
+**1. PERSONA: PEDAGOJİK MENTOR "BERKANT HOCA"**
+Sen, bir önceki soruyu çözmüş olan uzman eğitimcisin. Öğrencinin mesajını, orijinal soruyu ve verdiğin çözümü dikkate alarak, aşağıdaki durumsal mantığa göre cevap ver.
+
+**2. DURUM ANALİZİ (Öğrencinin Niyetini Anla)**
+   - **Niyet 1: Anlaşılmayan Nokta/Soru** (Örn: "3. adımı anlamadım", "Neden o formülü kullandık?")
+   - **Niyet 2: Teşekkür/Onay** (Örn: "teşekkür ederim", "anladım", "sağ olun hocam")
+   - **Niyet 3: Konu Dışı/Alakasız Yorum**
+
+**3. CEVAP ÜRETİMİ (Niyete Göre Cevap Ver)**
+   * **Eğer Niyet 1 (Soru) ise, BU FORMATTA CEVAP VER:**
+     "Elbette, hemen açıklayayım. O adımı kullanmamızın sebebi şuydu: ... (Basit, sabırlı ve daha detaylı bir açıklama yap. Gerekirse matematiksel ifadeleri $...$ içinde kullan.)"
+   * **Eğer Niyet 2 (Teşekkür) ise, BU CEVABI VER:**
+     "Rica ederim, ne demek! Anlamana sevindim. Unutma, sormaktan çekinme, her soru yeni bir öğrenme fırsatıdır. Başarılar dilerim! 😊"
+   * **Eğer Niyet 3 (Konu Dışı) ise, BU CEVABI VER:**
+     "Sevgili öğrencim, benim uzmanlık alanım ve şu anki görevim, gönderdiğin soruyu en iyi şekilde anlamana yardımcı olmak. Farklı bir konu hakkında yorum yapamam ama bu soruyla ilgili aklına takılan her şeyi memnuniyetle açıklarım!"
+
+**4. KESİN KURALLAR**
+   - **ASLA KALIN PUNTO KULLANMA.**
+   - Sadece matematiksel ifadeleri, değişkenleri ve sayıları tek dolar '$...$' arasına al.
+
+**5. BAĞLAM BİLGİLERİ**
+   - **Çözülen Soru Özeti:** "${solution.simplified_question}"
+   - **Verilen Cevap:** "${solution.final_answer}"
+   - **Öğrencinin Yeni Mesajı:** "${currentQuestion}"
+
+**Şimdi, bu yönergelere göre öğrencinin mesajına en uygun ve profesyonel cevabı oluştur.**`;
+                    
+                    const modelResponse = await callProxyAPI({prompt: prompt, isChat: true});
+                    setChatHistory(prev => [...prev, { role: 'model', content: modelResponse }]);
+                } catch (err) { 
+                    setChatHistory(prev => [...prev, { role: 'model', content: `Üzgünüm, bir hata oluştu: ${err.message}` }]); 
+                } finally { 
+                    setIsChatLoading(false); 
+                }
+            };
+
+            const reset = () => { setImage(null); setImageBase64(''); setSelectedSubject(null); setSolution(null); setStatus('idle'); setError(''); setShowAskTeacher(false); setChatHistory([]); setTeacherQuestion(''); setShowFeedbackButtons(true); setToastMessage(''); if (fileInputRef.current) fileInputRef.current.value = ""; };
             const handleLike = () => { setToastMessage("Değerlendirmen için teşekkürler! Bu çözüm, gelecekteki sorular için referans olacaktır. ✨"); setShowFeedbackButtons(false); };
             
-            return { image, selectedSubject, solution, solutionStep, loadingMessage, error, fileInputRef, handleFileChange, triggerFileSelect, setSelectedSubject, startSimplificationProcess, getSolutionSteps, getFinalAnswer, reset, showAskTeacher, setShowAskTeacher, teacherQuestion, setTeacherQuestion, chatHistory, isChatLoading, handleAskTeacher, toastMessage, showFeedbackButtons, handleLike };
+            return { image, selectedSubject, solution, status, loadingMessage, error, fileInputRef, handleFileChange, triggerFileSelect, setSelectedSubject, startSolutionProcess, reset, showAskTeacher, setShowAskTeacher, teacherQuestion, setTeacherQuestion, chatHistory, isChatLoading, handleAskTeacher, toastMessage, showFeedbackButtons, handleLike };
         };
 
         const SoruCozucuPage = ({ user, onLogout }) => {
-            const { image, selectedSubject, solution, solutionStep, loadingMessage, error, fileInputRef, handleFileChange, triggerFileSelect, setSelectedSubject, startSimplificationProcess, getSolutionSteps, getFinalAnswer, reset, showAskTeacher, setShowAskTeacher, teacherQuestion, setTeacherQuestion, chatHistory, isChatLoading, handleAskTeacher, toastMessage, showFeedbackButtons, handleLike } = useSoruCozucu();
+            const { image, selectedSubject, solution, status, loadingMessage, error, fileInputRef, handleFileChange, triggerFileSelect, setSelectedSubject, startSolutionProcess, reset, showAskTeacher, setShowAskTeacher, teacherQuestion, setTeacherQuestion, chatHistory, isChatLoading, handleAskTeacher, toastMessage, showFeedbackButtons, handleLike } = useSoruCozucu();
             const subjects = ['Matematik', 'Fizik', 'Kimya', 'Biyoloji', 'Tarih', 'Coğrafya', 'Edebiyat', 'Türkçe'];
             const [showCorrectionPrompt, setShowCorrectionPrompt] = useState(false);
             const [correctionText, setCorrectionText] = useState('');
-            const handleReSolve = () => { setShowCorrectionPrompt(false); /* Yeniden çözme mantığı güncellenmeli */ reset(); };
+            const handleReSolve = () => { setShowCorrectionPrompt(false); startSolutionProcess(null, correctionText); };
             
-            const isLoading = solutionStep === 'simplifying' || solutionStep === 'getting_steps' || solutionStep === 'getting_final_answer';
+            const isLoading = status === 'loading';
 
             return ( 
                 <div className="w-full max-w-4xl mx-auto bg-slate-800/50 backdrop-blur-xl border border-slate-700 rounded-2xl shadow-2xl p-4 sm:p-6 md:p-8 text-slate-200"> 
@@ -432,60 +485,48 @@ Bir önceki adımda çözüm adımları oluşturulan "${solution.simplified_ques
                     <AlertDisplay message={error} type="error" />
                     <div className="flex flex-col gap-6"> 
                         {/* Başlangıç ve Seçim Ekranı */}
-                        {solutionStep === 'idle' && (
-                            <>
-                                <div className="w-full flex flex-col items-center justify-center bg-slate-900/50 p-4 sm:p-6 rounded-lg border-2 border-dashed border-slate-600"> 
-                                    {image ? ( 
-                                        <div className="w-full text-center">
-                                            <img src={image} alt="Yüklenen Soru" className="max-w-full max-h-60 mx-auto rounded-lg shadow-md" />
-                                            <button onClick={reset} className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700">Yeni Soru Yükle</button>
-                                        </div> 
-                                    ) : ( 
-                                        <div className="text-center py-8 cursor-pointer w-full" onClick={triggerFileSelect}>
-                                            <svg className="mx-auto h-12 w-12 text-slate-500" stroke="currentColor" fill="none" viewBox="0 0 48 48"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                                            <p className="mt-2 text-sm font-medium text-slate-400">1. Adım: Fotoğraf Yükle</p>
-                                        </div> 
-                                    )} 
-                                    <input type="file" accept="image/*" onChange={handleFileChange} ref={fileInputRef} className="hidden" /> 
+                        <div className="w-full flex flex-col items-center justify-center bg-slate-900/50 p-4 sm:p-6 rounded-lg border-2 border-dashed border-slate-600"> 
+                            {image ? ( 
+                                <div className="w-full text-center">
+                                    <img src={image} alt="Yüklenen Soru" className="max-w-full max-h-60 mx-auto rounded-lg shadow-md" />
+                                    {status !== 'loading' && <button onClick={reset} className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700">Yeni Soru Yükle</button>}
                                 </div> 
-                                {image && !selectedSubject && ( <div className="w-full pt-4 border-t border-slate-700"><h2 className="text-lg font-semibold text-center text-slate-300 mb-3">2. Adım: Dersi Seç</h2><div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">{subjects.map(subject => (<button key={subject} onClick={() => setSelectedSubject(subject)} className={`py-2 px-3 rounded-lg font-semibold transition-all duration-200 text-sm sm:text-base ${selectedSubject === subject ? 'rainbow-active' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{subject}</button>))}</div></div> )} 
-                                {selectedSubject && ( <div className="w-full pt-4 border-t border-slate-700 text-center"><h2 className="text-lg font-semibold text-slate-300 mb-4">3. Adım: Cevabı Seç ve Analizi Başlat</h2><p className="text-sm text-slate-400 mb-4">Seçilen Ders: <span className="font-bold text-violet-400">{selectedSubject}</span></p><div className="flex justify-center items-center gap-3 flex-wrap">{['A', 'B', 'C', 'D', 'E'].map((option, index) => { const colors = ['bg-sky-500 hover:bg-sky-600', 'bg-emerald-500 hover:bg-emerald-600', 'bg-amber-500 hover:bg-amber-600', 'bg-rose-500 hover:bg-rose-600', 'bg-violet-500 hover:bg-violet-600']; return <button key={option} onClick={() => startSimplificationProcess(option)} className={`answer-button w-12 h-12 flex items-center justify-center text-white font-bold text-lg rounded-full shadow-lg ${colors[index]}`}>{option}</button> })}</div><div className="mt-4"><button onClick={() => startSimplificationProcess(null)} className="answer-button w-full sm:w-auto px-6 py-2 border-2 border-slate-500 text-slate-300 font-semibold rounded-full hover:bg-slate-700 hover:border-slate-400">Cevabı Bilmiyorum / Şık Yok</button></div></div> )} 
+                            ) : ( 
+                                <div className="text-center py-8 cursor-pointer w-full" onClick={triggerFileSelect}>
+                                    <svg className="mx-auto h-12 w-12 text-slate-500" stroke="currentColor" fill="none" viewBox="0 0 48 48"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                    <p className="mt-2 text-sm font-medium text-slate-400">1. Adım: Fotoğraf Yükle</p>
+                                </div> 
+                            )} 
+                            <input type="file" accept="image/*" onChange={handleFileChange} ref={fileInputRef} className="hidden" /> 
+                        </div> 
+                        
+                        {image && !solution && status !== 'loading' && (
+                            <>
+                                {!selectedSubject && ( <div className="w-full pt-4 border-t border-slate-700"><h2 className="text-lg font-semibold text-center text-slate-300 mb-3">2. Adım: Dersi Seç</h2><div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">{subjects.map(subject => (<button key={subject} onClick={() => setSelectedSubject(subject)} className={`py-2 px-3 rounded-lg font-semibold transition-all duration-200 text-sm sm:text-base ${selectedSubject === subject ? 'rainbow-active' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{subject}</button>))}</div></div> )} 
+                                {selectedSubject && ( <div className="w-full pt-4 border-t border-slate-700 text-center"><h2 className="text-lg font-semibold text-center text-slate-300 mb-4">3. Adım: Cevabı Seç ve Çözümü Başlat</h2><p className="text-sm text-slate-400 mb-4">Seçilen Ders: <span className="font-bold text-violet-400">{selectedSubject}</span></p><div className="flex justify-center items-center gap-3 flex-wrap">{['A', 'B', 'C', 'D', 'E'].map((option, index) => { const colors = ['bg-sky-500 hover:bg-sky-600', 'bg-emerald-500 hover:bg-emerald-600', 'bg-amber-500 hover:bg-amber-600', 'bg-rose-500 hover:bg-rose-600', 'bg-violet-500 hover:bg-violet-600']; return <button key={option} onClick={() => startSolutionProcess(option)} className={`answer-button w-12 h-12 flex items-center justify-center text-white font-bold text-lg rounded-full shadow-lg ${colors[index]}`}>{option}</button> })}</div><div className="mt-4"><button onClick={() => startSolutionProcess(null)} className="answer-button w-full sm:w-auto px-6 py-2 border-2 border-slate-500 text-slate-300 font-semibold rounded-full hover:bg-slate-700 hover:border-slate-400">Cevabı Bilmiyorum / Şık Yok</button></div></div> )} 
                             </>
                         )}
                         
-                        {/* Çözüm süreci başladıktan sonraki kalıcı arayüz */}
-                        {solutionStep !== 'idle' && solutionStep !== 'error' && (
-                             <div className="w-full flex flex-col items-center justify-center bg-slate-900/50 p-4 sm:p-6 rounded-lg border-2 border-dashed border-slate-600"> 
-                                <img src={image} alt="Yüklenen Soru" className="max-w-full max-h-60 mx-auto rounded-lg shadow-md" />
-                                <button onClick={reset} className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700">Yeni Soru Yükle</button>
-                            </div> 
-                        )}
-
                         {isLoading && <LoadingIndicator message={loadingMessage} />} 
                         
-                        {solution && (solutionStep !== 'idle' && solutionStep !== 'simplifying' && solutionStep !== 'error') && (
+                        {solution && status === 'success' && (
                             <>
-                                <SolutionDisplay solution={solution} subject={selectedSubject} onGetSteps={getSolutionSteps} onGetFinalAnswer={getFinalAnswer} status={solutionStep} />
-                                
-                                {solutionStep === 'solved' && (
-                                    <>
-                                        <div className="text-center pt-4"><button onClick={() => setShowAskTeacher(!showAskTeacher)} className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-150">👩‍🏫 Öğretmene Sor</button></div>
-                                        {showAskTeacher && (
-                                           <div className="mt-6 bg-slate-900/50 p-5 rounded-xl border border-slate-700">
-                                                <h3 className="text-lg font-bold text-slate-200 mb-4 text-center">Aklına Takılan Bir Yer Mi Var?</h3>
-                                                <div className="space-y-4 mb-4 max-h-60 overflow-y-auto pr-2">
-                                                    {chatHistory.map((chat, index) => (<div key={index} className={`flex ${chat.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-xs md:max-w-md p-3 rounded-2xl ${chat.role === 'user' ? 'bg-violet-600 text-white' : 'bg-slate-700 text-slate-200'}`}><UniversalMathRenderer text={chat.content} baseTextColor="text-slate-200" /></div></div>))}
-                                                    {isChatLoading && <div className="flex justify-start"><div className="p-3 rounded-2xl bg-slate-700"><span className="animate-pulse text-slate-400">...</span></div></div>}
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <textarea value={teacherQuestion} onChange={(e) => setTeacherQuestion(e.target.value)} placeholder="Bu soruyla ilgili merak ettiklerini yaz..." className="w-full p-2 border border-slate-600 bg-slate-800 text-slate-200 rounded-lg focus:ring-2 focus:ring-violet-500 focus:outline-none resize-none" rows="2" onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAskTeacher(); } }} />
-                                                    <button onClick={handleAskTeacher} disabled={isChatLoading || !teacherQuestion.trim()} className="bg-violet-600 text-white p-2 rounded-full hover:bg-violet-700 disabled:bg-slate-500 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg></button>
-                                                </div>
-                                            </div>
-                                        )}
-                                        {showFeedbackButtons ? (<div className="mt-6 p-4 bg-slate-700/50 border border-slate-600 rounded-lg text-center"><h3 className="font-semibold text-slate-200 mb-3">Çözüm Faydalı Oldu mu?</h3><div className="flex justify-center gap-4"><button onClick={handleLike} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">👍 Beğendim</button><button onClick={() => setShowCorrectionPrompt(true)} className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition">👎 Hatalı/Eksik</button></div></div>) : (toastMessage && (<AlertDisplay message={toastMessage} type="success" />))}
-                                    </>
+                                <SolutionDisplay solution={solution} subject={selectedSubject} />
+                                <div className="text-center pt-4"><button onClick={() => setShowAskTeacher(!showAskTeacher)} className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-150">👩‍🏫 Öğretmene Sor</button></div>
+                                {showAskTeacher && (
+                                   <div className="mt-6 bg-slate-900/50 p-5 rounded-xl border border-slate-700">
+                                        <h3 className="text-lg font-bold text-slate-200 mb-4 text-center">Aklına Takılan Bir Yer Mi Var?</h3>
+                                        <div className="space-y-4 mb-4 max-h-60 overflow-y-auto pr-2">
+                                            {chatHistory.map((chat, index) => (<div key={index} className={`flex ${chat.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-xs md:max-w-md p-3 rounded-2xl ${chat.role === 'user' ? 'bg-violet-600 text-white' : 'bg-slate-700 text-slate-200'}`}><UniversalMathRenderer text={chat.content} baseTextColor="text-slate-200" /></div></div>))}
+                                            {isChatLoading && <div className="flex justify-start"><div className="p-3 rounded-2xl bg-slate-700"><span className="animate-pulse text-slate-400">...</span></div></div>}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <textarea value={teacherQuestion} onChange={(e) => setTeacherQuestion(e.target.value)} placeholder="Bu soruyla ilgili merak ettiklerini yaz..." className="w-full p-2 border border-slate-600 bg-slate-800 text-slate-200 rounded-lg focus:ring-2 focus:ring-violet-500 focus:outline-none resize-none" rows="2" onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAskTeacher(); } }} />
+                                            <button onClick={handleAskTeacher} disabled={isChatLoading || !teacherQuestion.trim()} className="bg-violet-600 text-white p-2 rounded-full hover:bg-violet-700 disabled:bg-slate-500 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg></button>
+                                        </div>
+                                    </div>
                                 )}
+                                {showFeedbackButtons ? (<div className="mt-6 p-4 bg-slate-700/50 border border-slate-600 rounded-lg text-center"><h3 className="font-semibold text-slate-200 mb-3">Çözüm Faydalı Oldu mu?</h3><div className="flex justify-center gap-4"><button onClick={handleLike} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">👍 Beğendim</button><button onClick={() => setShowCorrectionPrompt(true)} className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition">👎 Hatalı/Eksik</button></div></div>) : (toastMessage && (<AlertDisplay message={toastMessage} type="success" />))}
                             </>
                         )}
                         
@@ -727,3 +768,4 @@ Bir önceki adımda çözüm adımları oluşturulan "${solution.simplified_ques
     </script>
 </body>
 </html>
+�
