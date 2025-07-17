@@ -1,6 +1,7 @@
-// Harici kütüphane yerine Node.js'in dahili https modülünü kullanıyoruz.
+// Harici kütüphane yerine Node.js'in dahili, daha stabil olan https modülünü kullanıyoruz.
 const https = require('https');
 
+// Bu yardımcı fonksiyon, https isteklerini daha modern bir "Promise" yapısıyla kullanmamızı sağlar.
 function httpsRequest(options, postData) {
   return new Promise((resolve, reject) => {
     const req = https.request(options, (res) => {
@@ -8,34 +9,48 @@ function httpsRequest(options, postData) {
       res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => {
         try {
-          resolve({ statusCode: res.statusCode, body: JSON.parse(body) });
+          // Gelen cevabın hem durum kodunu hem de içeriğini döndür
+          resolve({
+            statusCode: res.statusCode,
+            body: JSON.parse(body),
+          });
         } catch (e) {
-          resolve({ statusCode: res.statusCode, body: { error: { message: 'API\'den geçersiz JSON yanıtı alındı.', details: body } } });
+          // Eğer cevap JSON değilse, hatayı düz metin olarak döndür
+          resolve({
+            statusCode: res.statusCode,
+            body: { error: { message: 'API\'den geçersiz JSON yanıtı alındı.', details: body } }
+          });
         }
       });
     });
-    req.on('error', (e) => { reject(e); });
+
+    req.on('error', (e) => {
+      reject(e);
+    });
+
+    // İstek gövdesini yaz
     req.write(postData);
     req.end();
   });
 }
 
 exports.handler = async function (event) {
+  // Sadece POST isteklerine izin ver
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
   try {
+    // API Anahtarını Netlify ortam değişkenlerinden güvenli bir şekilde al
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error('API anahtarı bulunamadı. Lütfen Netlify ortam değişkenlerini kontrol edin.');
     }
 
-    // Frontend'den gelen görevi (task) ve diğer verileri al
-    const { task, prompt, imageBase64Data } = JSON.parse(event.body);
+    // Frontend'den gelen veriyi al
+    const { prompt, imageBase64Data, isChat = false } = JSON.parse(event.body);
     
-    // Tüm adımlar için hızlı ve verimli flash modelini kullanıyoruz.
-    const modelName = "gemini-2.5-flash"; 
+    const modelName = "gemini-2.5-flash";
     const hostname = 'generativelanguage.googleapis.com';
     const path = `/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
@@ -44,52 +59,42 @@ exports.handler = async function (event) {
       parts.push({ inlineData: { mimeType: "image/jpeg", data: imageBase64Data } });
     }
 
-    const payload = { contents: [{ role: "user", parts: parts }] };
+    const payload = {
+      contents: [{ role: "user", parts: parts }],
+    };
     
-    // Göreve göre modelden istenen JSON şemasını ayarla
-    if (task === 'simplify') {
+    // Eğer istek bir sohbet değilse, yapısal JSON formatında cevap iste
+    if (!isChat) {
       payload.generationConfig = {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: { "simplified_question": { "type": "STRING" } },
-          required: ["simplified_question"]
-        }
-      };
-    } else if (task === 'get_steps') {
-      payload.generationConfig = {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: { "solution_steps": { "type": "STRING" } },
-          required: ["solution_steps"]
-        }
-      };
-    } else if (task === 'get_final_answer') {
-        payload.generationConfig = {
         responseMimeType: "application/json",
         responseSchema: {
           type: "OBJECT",
           properties: {
+            "simplified_question": { "type": "STRING" },
+            "solution_steps": { "type": "STRING" },
             "final_answer": { "type": "STRING" },
             "recommendations": { "type": "STRING" }
           },
-          required: ["final_answer", "recommendations"]
+          required: ["simplified_question", "solution_steps", "final_answer", "recommendations"]
         }
       };
     }
-    else {
-        throw new Error("Geçersiz görev belirtildi.");
-    }
 
     const postData = JSON.stringify(payload);
+
     const options = {
-      hostname: hostname, path: path, method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
+      hostname: hostname,
+      path: path,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+      },
     };
 
     const response = await httpsRequest(options, postData);
 
+    // Gemini API'sinden gelen cevabı kontrol et
     if (response.statusCode < 200 || response.statusCode >= 300) {
       console.error('Gemini API Error:', response.body);
       return {
@@ -98,7 +103,11 @@ exports.handler = async function (event) {
       };
     }
 
-    return { statusCode: 200, body: JSON.stringify(response.body) };
+    // Başarılı cevabı frontend'e geri gönder
+    return {
+      statusCode: 200,
+      body: JSON.stringify(response.body),
+    };
 
   } catch (error) {
     console.error('Proxy Function Error:', error);
